@@ -1,0 +1,17 @@
+name = "supa"
+version = "1.0.0"
+target = "javascript"
+
+description = "An isomorphic Gleam library for Supabase (Auth only so far)."
+licences = ["Apache-2.0"]
+repository = { type = "github", user = "crowdhailer", repo = "supa" }
+
+[dependencies]
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
+gleam_http = ">= 3.7.2 and < 4.0.0"
+gleam_json = ">= 1.0.0 and < 3.0.0"
+snag = ">= 0.3.0 and < 1.0.0"
+midas = ">= 1.4.0 and < 2.0.0"
+
+[dev-dependencies]
+gleeunit = ">= 1.0.0 and < 2.0.0"
