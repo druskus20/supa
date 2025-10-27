@@ -5,9 +5,7 @@ import gleam/http/request
 import gleam/http/response
 import gleam/json
 import gleam/pair
-import gleam/string
 import rsvp
-import snag
 import supa/client
 import supa/utils
 
@@ -125,15 +123,15 @@ fn decode_response(response: Result(response.Response(String), rsvp.Error), deco
         200 ->
           case json.parse(response.body, decoder) {
             Ok(data) -> handler(Ok(data))
-            Error(reason) -> handler(Error(snag.new(string.inspect(reason))))
+            Error(decode_error) -> handler(Error(rsvp.JsonError(decode_error)))
           }
         _ ->
           case json.parse(response.body, error_decoder()) {
-            Ok(reason) -> handler(Error(snag.new(reason.message)))
-            Error(reason) -> handler(Error(snag.new(string.inspect(reason))))
+            Ok(_reason) -> handler(Error(rsvp.BadBody))
+            Error(_reason) -> handler(Error(rsvp.BadBody))
           }
       }
-    Error(rsvp_error) -> handler(Error(snag.new(string.inspect(rsvp_error))))
+    Error(rsvp_error) -> handler(Error(rsvp_error))
   }
 }
 
