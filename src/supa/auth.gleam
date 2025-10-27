@@ -33,7 +33,10 @@ pub fn sign_in_with_otp(client, email_address, create_user, handler) {
         ]),
       ),
     )
-  rsvp.send(request, rsvp.expect_any_response(decode_response(_, decode.success(Nil), handler)))
+  rsvp.send(
+    request,
+    rsvp.expect_any_response(decode_response(_, decode.success(Nil), handler)),
+  )
 }
 
 pub fn verify_otp(client, email_address, token, handler) {
@@ -50,7 +53,10 @@ pub fn verify_otp(client, email_address, token, handler) {
         ]),
       ),
     )
-  rsvp.send(request, rsvp.expect_any_response(decode_response(_, verify_decoder(), handler)))
+  rsvp.send(
+    request,
+    rsvp.expect_any_response(decode_response(_, verify_decoder(), handler)),
+  )
 }
 
 pub fn verify_decoder() {
@@ -116,20 +122,33 @@ fn user_decoder() {
   decode.success(User(created_at, email, id))
 }
 
-fn decode_response(response: Result(response.Response(String), rsvp.Error), decoder, handler) {
+fn decode_response(
+  response: Result(response.Response(String), rsvp.Error),
+  decoder,
+  handler,
+) {
   case response {
     Ok(response) ->
       case response.status {
-        200 ->
-          case json.parse(response.body, decoder) {
-            Ok(data) -> handler(Ok(data))
-            Error(decode_error) -> handler(Error(rsvp.JsonError(decode_error)))
+        code if code >= 200 && code < 300 -> {
+          // Check content type for JSON
+          case response.get_header(response, "content-type") {
+            Ok("application/json") | Ok("application/json;" <> _) -> {
+              case json.parse(response.body, decoder) {
+                Ok(data) -> handler(Ok(data))
+                Error(decode_error) ->
+                  handler(Error(rsvp.JsonError(decode_error)))
+              }
+            }
+            _ -> handler(Error(rsvp.UnhandledResponse(response)))
           }
-        _ ->
-          case json.parse(response.body, error_decoder()) {
-            Ok(_reason) -> handler(Error(rsvp.BadBody))
-            Error(_reason) -> handler(Error(rsvp.BadBody))
-          }
+        }
+        code if code >= 400 && code < 600 -> {
+          handler(Error(rsvp.HttpError(response)))
+        }
+        _ -> {
+          handler(Error(rsvp.UnhandledResponse(response)))
+        }
       }
     Error(rsvp_error) -> handler(Error(rsvp_error))
   }
@@ -137,10 +156,4 @@ fn decode_response(response: Result(response.Response(String), rsvp.Error), deco
 
 pub type Reason {
   Reason(error: String, message: String)
-}
-
-fn error_decoder() {
-  use error <- decode.field("error_code", decode.string)
-  use message <- decode.field("msg", decode.string)
-  decode.success(Reason(error, message))
 }
