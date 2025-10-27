@@ -6,12 +6,12 @@ description = "An isomorphic Gleam library for Supabase (Auth only so far)."
 licences = ["Apache-2.0"]
 repository = { type = "github", user = "crowdhailer", repo = "supa" }
 
+
 [dependencies]
 gleam_stdlib = ">= 0.34.0 and < 2.0.0"
-gleam_http = ">= 3.7.2 and < 4.0.0"
-gleam_json = ">= 1.0.0 and < 3.0.0"
-snag = ">= 1.1.0 and < 2.0.0"
-midas = ">= 1.4.0 and < 2.0.0"
+gleam_http = ">= 4.0.0 and < 5.0.0"
+gleam_json = ">= 3.0.0 and < 4.0.0"
+rsvp = ">= 1.0.0 and < 2.0.0"
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
