@@ -6,7 +6,7 @@ import gleam/http/response
 import gleam/json
 import gleam/pair
 import gleam/string
-import midas/task as t
+import rsvp
 import snag
 import supa/client
 import supa/utils
@@ -19,42 +19,40 @@ fn base(client) {
   |> request.set_path("/auth/v1")
   // Authorization header needed for auth endpoint
   |> request.prepend_header("Authorization", "Bearer " <> key)
-  |> request.set_body(<<>>)
+  |> request.set_body("")
 }
 
-pub fn sign_in_with_otp(client, email_address, create_user) {
+pub fn sign_in_with_otp(client, email_address, create_user, handler) {
   let request =
     base(client)
     |> request.set_method(http.Post)
     |> utils.append_path("/otp")
-    |> request.set_body(<<
+    |> request.set_body(
       json.to_string(
         json.object([
           #("email", json.string(email_address)),
           #("create_user", json.bool(create_user)),
         ]),
-      ):utf8,
-    >>)
-  use response <- t.do(t.fetch(request))
-  decode_response(response, decode.success(Nil))
+      ),
+    )
+  rsvp.send(request, rsvp.expect_any_response(decode_response(_, decode.success(Nil), handler)))
 }
 
-pub fn verify_otp(client, email_address, token) {
+pub fn verify_otp(client, email_address, token, handler) {
   let request =
     base(client)
     |> request.set_method(http.Post)
     |> utils.append_path("/verify")
-    |> request.set_body(<<
+    |> request.set_body(
       json.to_string(
         json.object([
           #("email", json.string(email_address)),
           #("token", json.string(token)),
           #("type", json.string("magiclink")),
         ]),
-      ):utf8,
-    >>)
-  use response <- t.do(t.fetch(request))
-  decode_response(response, verify_decoder())
+      ),
+    )
+  rsvp.send(request, rsvp.expect_any_response(decode_response(_, verify_decoder(), handler)))
 }
 
 pub fn verify_decoder() {
@@ -100,7 +98,13 @@ fn session_decoder() {
   use expires_in <- decode.field("expires_in", decode.int)
   use refresh_token <- decode.field("refresh_token", decode.string)
   use token_type <- decode.field("token_type", decode.string)
-  decode.success(Session(access_token, expires_at, expires_in, refresh_token, token_type))
+  decode.success(Session(
+    access_token,
+    expires_at,
+    expires_in,
+    refresh_token,
+    token_type,
+  ))
 }
 
 pub type User {
@@ -114,18 +118,22 @@ fn user_decoder() {
   decode.success(User(created_at, email, id))
 }
 
-fn decode_response(response: response.Response(_), decoder) {
-  case response.status {
-    200 ->
-      case json.parse_bits(response.body, decoder) {
-        Ok(data) -> t.done(data)
-        Error(reason) -> t.abort(snag.new(string.inspect(reason)))
+fn decode_response(response: Result(response.Response(String), rsvp.Error), decoder, handler) {
+  case response {
+    Ok(response) ->
+      case response.status {
+        200 ->
+          case json.parse(response.body, decoder) {
+            Ok(data) -> handler(Ok(data))
+            Error(reason) -> handler(Error(snag.new(string.inspect(reason))))
+          }
+        _ ->
+          case json.parse(response.body, error_decoder()) {
+            Ok(reason) -> handler(Error(snag.new(reason.message)))
+            Error(reason) -> handler(Error(snag.new(string.inspect(reason))))
+          }
       }
-    _ ->
-      case json.parse_bits(response.body, error_decoder()) {
-        Ok(reason) -> t.abort(snag.new(reason.message))
-        Error(reason) -> t.abort(snag.new(string.inspect(reason)))
-      }
+    Error(rsvp_error) -> handler(Error(snag.new(string.inspect(rsvp_error))))
   }
 }
 
