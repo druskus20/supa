@@ -5,6 +5,7 @@ import gleam/http/request
 import gleam/http/response
 import gleam/json
 import gleam/pair
+import lustre/effect
 import rsvp
 import supa/client
 import supa/utils
@@ -57,6 +58,46 @@ pub fn verify_otp(client, email_address, token, handler) {
     request,
     rsvp.expect_any_response(decode_response(_, verify_decoder(), handler)),
   )
+}
+
+pub fn sign_in_with_github(client, redirect_to, handler) {
+  let client.Client(host, _) = client
+  let auth_url = "https://" <> host <> "/auth/v1/authorize?provider=github&redirect_to=" <> redirect_to
+  effect.from(fn(dispatch) { dispatch(handler(Ok(auth_url))) })
+}
+
+pub fn exchange_code_for_session(client, authorization_code, code_verifier, handler) {
+  let request =
+    base(client)
+    |> request.set_method(http.Post)
+    |> utils.append_path("/token")
+    |> request.set_body(
+      json.to_string(
+        json.object([
+          #("grant_type", json.string("authorization_code")),
+          #("code", json.string(authorization_code)),
+          #("code_verifier", json.string(code_verifier)),
+        ]),
+      ),
+    )
+  rsvp.send(
+    request,
+    rsvp.expect_any_response(decode_response(_, verify_decoder(), handler)),
+  )
+}
+
+pub fn get_session_from_url(handler) {
+  effect.from(fn(dispatch) {
+    dispatch(handler(parse_url_session()))
+  })
+}
+
+@external(javascript, "./auth_ffi.mjs", "parseUrlSession")
+fn parse_url_session() -> Result(#(Session, User), Nil)
+
+pub fn oauth_url_decoder() {
+  use url <- decode.field("url", decode.string)
+  decode.success(url)
 }
 
 pub fn verify_decoder() {
