@@ -4,7 +4,33 @@ export function parseUrlSession() {
   }
 
   const fragment = window.location.hash.substring(1);
-  if (!fragment) {
+
+  // First try to parse from URL fragment (fresh from OAuth)
+  if (fragment && fragment.includes('access_token')) {
+    // Continue with URL fragment parsing below...
+  } else {
+    // No URL fragment, try to load from localStorage
+    try {
+      const stored = localStorage.getItem('supabase_session');
+      if (stored) {
+        const { session, user } = JSON.parse(stored);
+
+        // Check if session is still valid (not expired)
+        if (session.expires_at > Math.floor(Date.now() / 1000)) {
+          return {
+            tag: "Ok",
+            _0: [session, user]
+          };
+        } else {
+          // Session expired, clear it
+          localStorage.removeItem('supabase_session');
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load session from localStorage:', e);
+      localStorage.removeItem('supabase_session');
+    }
+
     return { tag: "Error", _0: null };
   }
 
@@ -38,6 +64,16 @@ export function parseUrlSession() {
     token_type: tokenType || 'bearer',
     expires_at: Math.floor(Date.now() / 1000) + (parseInt(expiresIn) || 3600)
   };
+
+  // Store session in localStorage for persistence
+  try {
+    localStorage.setItem('supabase_session', JSON.stringify({
+      session: session,
+      user: user
+    }));
+  } catch (e) {
+    console.warn('Could not store session in localStorage:', e);
+  }
 
   // Clear the URL fragment after parsing
   if (window.history && window.history.replaceState) {
