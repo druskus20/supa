@@ -5,7 +5,6 @@ import gleam/http/request
 import gleam/http/response
 import gleam/json
 import gleam/pair
-import lustre/effect
 import rsvp
 import supa/client
 import supa/utils
@@ -60,10 +59,10 @@ pub fn verify_otp(client, email_address, token, handler) {
   )
 }
 
-pub fn sign_in_with_github(client, redirect_to, handler) {
+pub fn sign_in_with_github(client, redirect_to, effect_from, handler) {
   let client.Client(host, _) = client
   let auth_url = "https://" <> host <> "/auth/v1/authorize?provider=github&redirect_to=" <> redirect_to
-  effect.from(fn(dispatch) { dispatch(handler(Ok(auth_url))) })
+  effect_from(fn(dispatch) { dispatch(handler(Ok(auth_url))) })
 }
 
 pub fn exchange_code_for_session(client, authorization_code, code_verifier, handler) {
@@ -86,8 +85,8 @@ pub fn exchange_code_for_session(client, authorization_code, code_verifier, hand
   )
 }
 
-pub fn get_session_from_url(handler) {
-  effect.from(fn(dispatch) {
+pub fn get_session_from_url(effect_from, handler) {
+  effect_from(fn(dispatch) {
     dispatch(handler(parse_url_session()))
   })
 }
