@@ -5,7 +5,7 @@ import gleam/http/request
 import gleam/http/response
 import gleam/json
 import gleam/pair
-import gleam/option.{type Option, None, Some}
+import gleam/option.{None, Some}
 import rsvp
 import supa/client
 import supa/utils
@@ -93,16 +93,45 @@ pub fn get_session_from_url(effect_from, handler) {
   })
 }
 
-pub fn sign_out(client, handler) {
-  let _ = clear_session()
-  let request =
-    base(client)
-    |> request.set_method(http.Post)
-    |> utils.append_path("/logout")
-  rsvp.send(
-    request,
-    rsvp.expect_any_response(decode_response(_, decode.success(Nil), handler)),
-  )
+pub fn sign_out(
+  client: client.Client,
+  handler: fn(Result(Nil, rsvp.Error)) -> a,
+) -> Nil {
+  // Try to get current session for access token before clearing
+  case get_stored_session() {
+    Ok(json_str) -> {
+      case json.parse(json_str, stored_session_decoder()) {
+        Ok(#(session, _)) -> {
+          // Clear session locally first
+          let _ = clear_session()
+
+          // Use the user's access token for logout
+          let request =
+            base(client)
+            |> request.set_method(http.Post)
+            |> request.prepend_header("Authorization", "Bearer " <> session.access_token)
+            |> utils.append_path("/logout")
+          let _ = rsvp.send(
+            request,
+            rsvp.expect_any_response(decode_response(_, decode.success(Nil), handler)),
+          )
+          Nil
+        }
+        Error(_) -> {
+          // No valid session, just clear locally and return success
+          let _ = clear_session()
+          let _ = handler(Ok(Nil))
+          Nil
+        }
+      }
+    }
+    Error(_) -> {
+      // No stored session, just clear locally and return success
+      let _ = clear_session()
+      let _ = handler(Ok(Nil))
+      Nil
+    }
+  }
 }
 
 fn parse_session() -> Result(#(Session, User), String) {
