@@ -45,7 +45,8 @@ The database module provides functions for querying, inserting, updating, and de
 import supa/database
 import supa/client
 import gleam/dynamic/decode
-import midas/browser
+import gleam/option.{Some}
+import lustre/effect
 
 pub type User {
   User(id: String, name: String, email: String)
@@ -58,32 +59,43 @@ fn user_decoder() {
   decode.success(User(id, name, email))
 }
 
-pub fn get_users() {
-  let client = client.create("xyzcompany.supabase.co", "public-anon-key")
-
-  // Select all users
+pub fn list_users(client: client.Client, access_token: String) -> effect.Effect(Result(List(User), String)) {
   let query = database.from("users")
 
-  browser.run(database.execute_select(client, query, user_decoder(), fn(result) {
-    case result {
-      Ok(users) -> // Handle list of users
-      Error(_) -> // Handle error
-    }
-  }))
+  database.execute_select(
+    client,
+    Some(access_token),
+    query,
+    user_decoder(),
+    fn(result) {
+      case result {
+        Ok(users) -> Ok(users)
+        Error(_) -> Error("Failed to fetch users")
+      }
+    },
+  )
 }
 
 // Select with filters and ordering
-pub fn get_active_users() {
-  let client = client.create("xyzcompany.supabase.co", "public-anon-key")
-
+pub fn get_active_users(client: client.Client, access_token: String) -> effect.Effect(Result(List(User), String)) {
   let query =
     database.from("users")
-    |> database.select(["id", "name", "email"])
     |> database.filter(database.eq("status", "active"))
     |> database.order(database.desc("created_at"))
     |> database.limit(10)
 
-  browser.run(database.execute_select(client, query, user_decoder(), handle_users))
+  database.execute_select(
+    client,
+    Some(access_token),
+    query,
+    user_decoder(),
+    fn(result) {
+      case result {
+        Ok(users) -> Ok(users)
+        Error(_) -> Error("Failed to fetch users")
+      }
+    },
+  )
 }
 ```
 
@@ -92,53 +104,101 @@ pub fn get_active_users() {
 ```gleam
 import gleam/json
 
-pub fn create_user() {
-  let client = client.create("xyzcompany.supabase.co", "public-anon-key")
-
+pub fn create_user(
+  client: client.Client,
+  access_token: String,
+  name: String,
+  email: String
+) -> effect.Effect(Result(User, String)) {
   let user_data = json.object([
-    #("name", json.string("John Doe")),
-    #("email", json.string("john@example.com")),
+    #("name", json.string(name)),
+    #("email", json.string(email)),
     #("status", json.string("active"))
   ])
 
-  browser.run(database.execute_insert(client, "users", user_data, fn(result) {
-    case result {
-      Ok(created_users) -> // Handle created user data
-      Error(_) -> // Handle error
-    }
-  }))
+  database.execute_insert(
+    client,
+    Some(access_token),
+    "users",
+    user_data,
+    fn(result) {
+      case result {
+        Ok([dynamic_user]) -> {
+          case decode.run(dynamic_user, user_decoder()) {
+            Ok(new_user) -> Ok(new_user)
+            Error(_) -> Error("Failed to parse created user")
+          }
+        }
+        Ok(_) -> Error("Unexpected response from create")
+        Error(_) -> Error("Failed to create user")
+      }
+    },
+  )
 }
 ```
 
 ### Updating Data
 
 ```gleam
-pub fn update_user_status() {
-  let client = client.create("xyzcompany.supabase.co", "public-anon-key")
-
+pub fn update_user_status(
+  client: client.Client,
+  access_token: String,
+  user_id: String,
+  status: String
+) -> effect.Effect(Result(User, String)) {
   let query =
     database.from("users")
-    |> database.filter(database.eq("id", "user-123"))
+    |> database.filter(database.eq("id", user_id))
 
   let update_data = json.object([
-    #("status", json.string("inactive"))
+    #("status", json.string(status))
   ])
 
-  browser.run(database.execute_update(client, query, update_data, handle_update))
+  database.execute_update(
+    client,
+    Some(access_token),
+    query,
+    update_data,
+    fn(result) {
+      case result {
+        Ok([dynamic_user]) -> {
+          case decode.run(dynamic_user, user_decoder()) {
+            Ok(updated_user) -> Ok(updated_user)
+            Error(_) -> Error("Failed to parse updated user")
+          }
+        }
+        Ok([]) -> Error("User not found for update")
+        Ok(_) -> Error("Multiple users returned from update")
+        Error(_) -> Error("Failed to update user")
+      }
+    },
+  )
 }
 ```
 
 ### Deleting Data
 
 ```gleam
-pub fn delete_user() {
-  let client = client.create("xyzcompany.supabase.co", "public-anon-key")
-
+pub fn delete_user(
+  client: client.Client,
+  access_token: String,
+  user_id: String
+) -> effect.Effect(Result(Nil, String)) {
   let query =
     database.from("users")
-    |> database.filter(database.eq("id", "user-123"))
+    |> database.filter(database.eq("id", user_id))
 
-  browser.run(database.execute_delete(client, query, handle_delete))
+  database.execute_delete(
+    client,
+    Some(access_token),
+    query,
+    fn(result) {
+      case result {
+        Ok(_) -> Ok(Nil)
+        Error(_) -> Error("Failed to delete user")
+      }
+    }
+  )
 }
 ```
 
