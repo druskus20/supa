@@ -1,5 +1,10 @@
 # supa
 
+> [WARN] 
+> This is a fork of the original supa library by CrowdHailer: https://github.com/CrowdHailer/supa. 
+> I recommend using that version since I am unsure how actively this fork will
+> be maintained (if at all).
+
 [Supabase](https://supabase.com/) client implemented in Gleam. 
 
 Notes:

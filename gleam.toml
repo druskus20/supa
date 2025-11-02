@@ -2,9 +2,9 @@ name = "supa"
 version = "1.0.1"
 target = "javascript"
 
-description = "An isomorphic Gleam library for Supabase (Auth only so far)."
+description = "An isomorphic Gleam library for Supabase."
 licences = ["Apache-2.0"]
-repository = { type = "github", user = "crowdhailer", repo = "supa" }
+repository = { type = "github", user = "druskus20", repo = "supa" }
 
 
 [dependencies]
